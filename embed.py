@@ -2,7 +2,9 @@ import typing as t
 
 
 class Embed:
-    def __init__(self, title: t.Optional[str], description: t.Optional[str]) -> None:
+    def __init__(
+        self, title: t.Optional[str] = None, description: t.Optional[str] = None
+    ) -> None:
         self.title = title
         self.description = description
 

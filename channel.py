@@ -22,7 +22,7 @@ class TextChannel:
         self.nsfw = channel_json["nsfw"]
         self.rate_limit_per_user = channel_json["rate_limit_per_user"]
 
-    def send(
+    async def send(
         self,
         content: t.Optional[str],
         *,
@@ -39,13 +39,14 @@ class TextChannel:
             embeds `Optional[List[Dict[Any, Any]]]`: A list of dictionaries representing discord embeds. Defaults to None.
         """
 
-        if content is None:
+        if (
+            content is None
+            and embeds is None
+            or type(embeds) == list
+            and len(embeds) == 0
+        ):
+            raise ValueError(
+                "Discord requires either a message content or embed to send in a message"
+            )
 
-            if len(embeds) == 0:  # type: ignore
-                raise ValueError(
-                    "Discord requires either a message content or embed to send in a message"
-                )
-
-        self.loop.run_until_complete(
-            self.http.send_message(self.id, content, tts, embeds)
-        )
+        await self.http.send_message(self.id, content, tts, embeds)

@@ -6,6 +6,7 @@ from . import http
 from . import channel
 from .guild import Guild
 import websockets
+from .embed import Embed
 
 
 class Bot:
@@ -88,7 +89,7 @@ class Bot:
         content: t.Optional[str],
         *,
         tts: t.Optional[bool] = False,
-        embeds: t.Optional[t.List[t.Dict[t.Any, t.Any]]] = None,
+        embeds: t.Optional[t.List[Embed]] = None,
     ):
         """Sends a message as the bot to the specified discord text channel
 
@@ -111,7 +112,7 @@ class Bot:
 
         await self.http.send_message(channel_id, content, tts, embeds)
 
-    def get_text_channel(self, channel_id: int) -> channel.TextChannel:
+    async def get_text_channel(self, channel_id: int) -> channel.TextChannel:
         """Get the discord text channel for a given id
 
         Args:
@@ -121,14 +122,17 @@ class Bot:
             channel.TextChannel: The channel object that corresponds to the id provided
         """
 
-        channel_json = self.loop.run_until_complete(self.http.get_channel(channel_id))
+        channel_json = await self.http.get_channel(channel_id)
         return channel.TextChannel(channel_json, self)  # type: ignore
 
     def get_guild(self, guild_id: int) -> Guild:
-        json = self.loop.run_until_complete(self.http.get_guild(guild_id))
+        loop = asyncio.new_event_loop()
+        json = loop.run_until_complete(self.http.get_guild(guild_id))
         return Guild(self, json)
 
     def complete_pending_tasks(self):
+        loop = asyncio.new_event_loop()
+
         def get_pending_tasks():
             tasks = asyncio.all_tasks()
             pending = [
@@ -144,7 +148,7 @@ class Bot:
                 await asyncio.gather(*pending_tasks)
 
         run_main = run_all_pending_tasks()
-        run_main_task = self.loop.create_task(run_main)
+        run_main_task = loop.create_task(run_main)
         self.loop.run_until_complete(run_main_task)
 
     def start(self) -> None:
