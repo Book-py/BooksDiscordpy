@@ -1,7 +1,6 @@
 import typing as t
 import asyncio
-import threading
-import time
+import json
 
 from . import http
 from . import channel
@@ -49,11 +48,11 @@ class Bot:
             data = await discord_websocket.recv()
             print(data)
 
-            data = f"""{{
+            payload = f"""{{
         "op": 2,
         "d": {{
             "token": "{self.token}",
-            "intents": 513,
+            "intents": {1 << 9},
             "properties": {{
                 "$os": "linux",
                 "$browser": "books_discord_py",
@@ -61,12 +60,29 @@ class Bot:
             }}
         }}
     }}"""
-            await discord_websocket.send(data)
+            await discord_websocket.send(payload)
 
             ready_data = await discord_websocket.recv()
-            print(ready_data)
 
-    def send_message(
+            should_receive = True
+
+            while should_receive:
+                data = await discord_websocket.recv()
+
+                self.handle_events(json.loads(data))
+
+    def handle_events(self, event_data) -> None:
+
+        if event_data["op"] != 0:
+            return
+
+        if event_data["t"] == "MESSAGE_CREATE":
+            asyncio.ensure_future(self.on_message_create(event_data["d"]))
+
+    async def on_message_create(self, message_data: dict):
+        print(f"Recieved a message!\nContent: {message_data['content']}")
+
+    async def send_message(
         self,
         channel_id: int,
         content: t.Optional[str],
@@ -93,11 +109,7 @@ class Bot:
                 "Discord requires either a message content or embed to send in a message"
             )
 
-        self.loop.run_until_complete(
-            self.http.send_message(channel_id, content, tts, embeds)
-        )
-
-        # return return_value
+        await self.http.send_message(channel_id, content, tts, embeds)
 
     def get_text_channel(self, channel_id: int) -> channel.TextChannel:
         """Get the discord text channel for a given id

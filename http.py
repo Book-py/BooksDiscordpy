@@ -10,10 +10,6 @@ class DiscordHttpClient:
         self.loop = loop
         self.__session = aiohttp.ClientSession()
 
-    async def close(self) -> None:
-        if not self.__session.closed:
-            await self.__session.close()
-
     def login(self, token):
         self.token = token
         # headers = {
@@ -56,10 +52,7 @@ class DiscordHttpClient:
 
         url = f"https://discord.com/api/v9/channels/{channel_id}/messages"
 
-        async with self.__session as session:
-            if session.closed:
-                session = self.recreate()
-
+        async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=message_data) as data:
 
                 if data.status != 200:
@@ -84,24 +77,16 @@ class DiscordHttpClient:
 
         url = f"https://discord.com/api/v9/channels/{channel_id}"
 
-        async with self.__session as session:
-            if session.closed:
-                session = self.recreate()
-
+        async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
                 return await response.json()
-
-        return  # type: ignore
 
     async def get_guild(self, guild_id: int) -> aiohttp.ClientResponse:
         headers = {"Authorization": f"Bot {self.token}"}
 
         url = f"https://discord.com/api/v9/guilds/{guild_id}"
 
-        async with self.__session as session:
-            if session.closed:
-                session = self.recreate()
-
+        async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
                 return await response.json()
 
@@ -141,19 +126,10 @@ class DiscordHttpClient:
 
         url = f"https://discord.com/api/v9/channels/{channel_id}"
 
-        async with self.__session as session:
-            if session.closed:
-                session = self.recreate()
-
+        async with aiohttp.ClientSession() as session:
             async with session.patch(url, headers=headers, json=data) as response:
 
                 if response.status == 400:
                     raise ValueError(f"One or more arguments were invalid")
 
                 return await response.json()
-
-    def recreate(self):
-        if self.__session.closed:
-            self.__session = aiohttp.ClientSession()
-
-        return self.__session
