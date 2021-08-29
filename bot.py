@@ -3,7 +3,6 @@ import asyncio
 import threading
 import time
 
-from discord.gateway import DiscordWebSocket
 from . import http
 from . import channel
 from .guild import Guild
@@ -31,21 +30,41 @@ class Bot:
 
         self.http.login(self.token)
 
-    async def connect(self, *, reconnect: bool = True):
+    async def connect(self):
+        """Connect the bot to the discord servers
 
-        ws_params = {"initial": True, "shard_id": 1}
+        Args:
+            reconnect (bool): If we should try to reconnect to discord after the connection is closed. Defaults to True.
+        """
 
-        while not self.is_closed:
-            try:
-                coro = DiscordWebSocket.from_client(self, **ws_params)
-                self.ws = await asyncio.wait_for(coro, timeout=60.0)
+        headers = {
+            "Authorization": f"Bot {self.token}",
+            "bot": "True",
+            "Content-type": "application/json",
+        }
 
-                ws_params["initial"] = False
+        async with websockets.connect(  # type: ignore
+            uri="wss://gateway.discord.gg/?v=9&encoding=json", extra_headers=headers
+        ) as discord_websocket:
+            data = await discord_websocket.recv()
+            print(data)
 
-                while True:
-                    await self.ws.poll_event()
-            except:
-                pass
+            data = f"""{{
+        "op": 2,
+        "d": {{
+            "token": "{self.token}",
+            "intents": 513,
+            "properties": {{
+                "$os": "linux",
+                "$browser": "books_discord_py",
+                "$device": "books_discord_py"
+            }}
+        }}
+    }}"""
+            await discord_websocket.send(data)
+
+            ready_data = await discord_websocket.recv()
+            print(ready_data)
 
     def send_message(
         self,
@@ -53,7 +72,7 @@ class Bot:
         content: t.Optional[str],
         *,
         tts: t.Optional[bool] = False,
-        embeds: t.Optional[t.List[t.Dict[t.Any, t.Any]]] = None
+        embeds: t.Optional[t.List[t.Dict[t.Any, t.Any]]] = None,
     ):
         """Sends a message as the bot to the specified discord text channel
 
@@ -97,7 +116,7 @@ class Bot:
         json = self.loop.run_until_complete(self.http.get_guild(guild_id))
         return Guild(self, json)
 
-    def start(self):
+    def complete_pending_tasks(self):
         def get_pending_tasks():
             tasks = asyncio.all_tasks()
             pending = [
@@ -115,6 +134,15 @@ class Bot:
         run_main = run_all_pending_tasks()
         run_main_task = self.loop.create_task(run_main)
         self.loop.run_until_complete(run_main_task)
+
+    def start(self) -> None:
+        """Starts the bot and establishes a connection to discord"""
+
+        loop = asyncio.new_event_loop()
+        loop.create_task(self.connect())
+        loop.run_forever()
+
+        # {"t":null,"s":null,"op":10,"d":{"heartbeat_interval":41250,"_trace":["[\"gateway-prd-main-h3kg\",{\"micros\":0.0}]"]}}
 
     def close(self):
 
