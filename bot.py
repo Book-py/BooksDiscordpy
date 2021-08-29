@@ -7,6 +7,7 @@ from . import channel
 from .guild import Guild
 import websockets
 from .embed import Embed
+from .message import Message
 
 
 class Bot:
@@ -16,13 +17,17 @@ class Bot:
     the bot. You can subclass this class to get extra functionality and features not already added.
     """
 
-    def __init__(self, debug: t.Optional[bool] = True, *, token: str) -> None:
+    def __init__(
+        self, debug: t.Optional[bool] = True, *, token: str, prefix: str
+    ) -> None:
 
         self.running = False
         self.loop = asyncio.get_event_loop()
 
         if debug:
             self.loop.set_debug(True)
+
+        self.prefix = prefix
 
         self.http = http.DiscordHttpClient(self.loop)
         self.is_closed = False
@@ -63,25 +68,32 @@ class Bot:
     }}"""
             await discord_websocket.send(payload)
 
-            ready_data = await discord_websocket.recv()
+            # ready_data = await discord_websocket.recv()
 
             should_receive = True
 
             while should_receive:
                 data = await discord_websocket.recv()
 
-                self.handle_events(json.loads(data))
+                asyncio.ensure_future(self.handle_events(json.loads(data)))
 
-    def handle_events(self, event_data) -> None:
+    async def handle_events(self, event_data) -> None:
 
         if event_data["op"] != 0:
             return
 
         if event_data["t"] == "MESSAGE_CREATE":
-            asyncio.ensure_future(self.on_message_create(event_data["d"]))
+            message = await Message(self).setup(event_data["d"])
+            asyncio.ensure_future(self.on_message_create(message))
 
-    async def on_message_create(self, message_data: dict):
-        print(f"Recieved a message!\nContent: {message_data['content']}")
+        if event_data["t"] == "READY":
+            asyncio.ensure_future(self.on_ready())
+
+    async def on_ready(self):
+        pass
+
+    async def on_message_create(self, message: Message):
+        pass
 
     async def send_message(
         self,
