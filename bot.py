@@ -8,6 +8,8 @@ from .guild import Guild
 import websockets
 from .embed import Embed
 from .message import Message
+from .command import BotCommand
+from .context import Context
 
 
 class Bot:
@@ -34,6 +36,7 @@ class Bot:
         self.token = token
 
         self.http.login(self.token)
+        self.commands: t.List[BotCommand] = []
 
     async def connect(self):
         """Connect the bot to the discord servers
@@ -93,7 +96,30 @@ class Bot:
         pass
 
     async def on_message_create(self, message: Message):
-        pass
+        await self.process_command(message)
+
+    async def process_command(self, message: Message):
+        """Processes the message to check if it is a command, and if so calls the command
+
+        Args:
+            message (Message): The message to process
+        """
+
+        if message.content.startswith(self.prefix):
+            command_message = message.content[len(self.prefix) :]
+
+            for command in self.commands:
+                if command_message.startswith(command.name):
+                    # They have ran a command
+                    context = Context(self, message)
+                    await command.call_command(context)
+                    return
+
+                if command_message.split(" ")[0] in command.aliases:
+                    # They have run a command
+                    context = Context(self, message)
+                    await command.call_command(context)
+                    return
 
     async def send_message(
         self,
@@ -137,10 +163,9 @@ class Bot:
         channel_json = await self.http.get_channel(channel_id)
         return channel.TextChannel(channel_json, self)  # type: ignore
 
-    def get_guild(self, guild_id: int) -> Guild:
-        loop = asyncio.new_event_loop()
-        json = loop.run_until_complete(self.http.get_guild(guild_id))
-        return Guild(self, json)
+    async def get_guild(self, guild_id: int) -> Guild:
+        guild_json = await self.http.get_guild(guild_id)
+        return Guild(self, guild_json)
 
     def complete_pending_tasks(self):
         loop = asyncio.new_event_loop()
@@ -176,3 +201,18 @@ class Bot:
 
         asyncio.run(self.http.close())
         self.loop.close()
+
+    def add_command(
+        self,
+        *,
+        name: t.Optional[str] = None,
+        aliases: t.Optional[t.List[str]] = None,
+        description: t.Optional[str] = None,
+    ):
+        def inner(func):
+            command = BotCommand(self, name, aliases, description, callback=func)
+            self.commands.append(command)
+
+            return func
+
+        return inner

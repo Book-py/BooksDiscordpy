@@ -3,6 +3,9 @@ import sys
 
 
 class Guild:
+    def __getitem__(self, key: t.Any):
+        pass
+
     def __init__(self, bot, json):
         self.bot = bot
 
