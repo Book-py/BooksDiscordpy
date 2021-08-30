@@ -1,15 +1,17 @@
-import typing as t
 import asyncio
+import inspect
 import json
+import typing as t
 
-from . import http
-from . import channel
-from .guild import Guild
 import websockets
-from .embed import Embed
-from .message import Message
+
+from . import channel, errors, http
 from .command import BotCommand
 from .context import Context
+from .embed import Embed
+from .guild import Guild
+from .message import Message
+from .user import User
 
 
 class Bot:
@@ -55,7 +57,6 @@ class Bot:
             uri="wss://gateway.discord.gg/?v=9&encoding=json", extra_headers=headers
         ) as discord_websocket:
             data = await discord_websocket.recv()
-            print(data)
 
             payload = f"""{{
         "op": 2,
@@ -71,7 +72,9 @@ class Bot:
     }}"""
             await discord_websocket.send(payload)
 
-            # ready_data = await discord_websocket.recv()
+            ready_data = await discord_websocket.recv()
+            user_json = json.loads(ready_data)
+            self.user = User(user_json["d"]["user"], self)
 
             should_receive = True
 
@@ -104,22 +107,68 @@ class Bot:
         Args:
             message (Message): The message to process
         """
+        try:
+            if message.content.startswith(self.prefix):
+                command_message = message.content[len(self.prefix) :]
 
-        if message.content.startswith(self.prefix):
-            command_message = message.content[len(self.prefix) :]
+                for command in self.commands:
+                    if command_message.split(" ")[0] == command.name:
+                        # They have ran a command
 
-            for command in self.commands:
-                if command_message.startswith(command.name):
-                    # They have ran a command
-                    context = Context(self, message)
-                    await command.call_command(context)
-                    return
+                        # Handle the arguments to the command
+                        given_arguments = command_message.split(" ")[1:]
 
-                if command_message.split(" ")[0] in command.aliases:
-                    # They have run a command
-                    context = Context(self, message)
-                    await command.call_command(context)
-                    return
+                        # The signature of the command
+                        sig = inspect.signature(command.callback)
+
+                        print(sig.parameters)
+
+                        items = sig.parameters.items()
+
+                        position = -1
+                        for key, value in items:
+                            if value.annotation == int:
+
+                                given_arguments[position] = int(
+                                    given_arguments[position]
+                                )
+
+                            if value.annotation == Guild:
+                                if given_arguments[position].isnumeric():
+                                    guild = await self.get_guild(
+                                        int(given_arguments[position])
+                                    )
+                                    given_arguments[position] = guild
+
+                            position += 1
+
+                        # Check for the number of parameters given
+                        if len(given_arguments) > len(sig.parameters) - 1:
+                            raise errors.TooManyArguments(
+                                "Too many arguments were passed"
+                            )
+                        elif len(given_arguments) < len(sig.parameters) - 1:
+                            raise errors.NotEnoughArguments(
+                                "Not enough arguments were passed"
+                            )
+
+                        # Get the context of the command, and invoke it
+                        context = Context(self, message)
+                        await command.call_command(context, *given_arguments)
+                        return
+
+                    if command_message.split(" ")[0] in command.aliases:
+                        # They have run a command
+                        context = Context(self, message)
+                        await command.call_command(context)
+                        return
+
+        except Exception as e:
+            context = Context(self, message)
+            await self.on_command_error(e, context)
+
+    async def on_command_error(self, exc: Exception, context: Context):
+        raise exc
 
     async def send_message(
         self,
@@ -210,9 +259,12 @@ class Bot:
         description: t.Optional[str] = None,
     ):
         def inner(func):
-            command = BotCommand(self, name, aliases, description, callback=func)
-            self.commands.append(command)
+            if inspect.iscoroutinefunction(func):
+                command = BotCommand(self, name, aliases, description, callback=func)
+                self.commands.append(command)
 
-            return func
+                return func
+            else:
+                raise TypeError("Commands must be a coroutine")
 
         return inner

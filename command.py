@@ -34,7 +34,7 @@ class BotCommand:
 
     @property
     def callback(self):
-        return self.callback
+        return self._callback
 
-    async def call_command(self, context):
-        await self._callback(context)
+    async def call_command(self, context, *args):
+        await self._callback(context, *args)

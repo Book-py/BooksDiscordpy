@@ -11,7 +11,7 @@ class TextChannel:
         # Defining all the attributes from what gets returned from the discord API in `channel_json`
         self.id = channel_json["id"]
         self.last_message_id = channel_json["last_message_id"]
-        # self.last_pin_timestamp = channel_json["last_pin_timestamp"]
+        self.last_pin_timestamp = channel_json.get("last_pin_timestamp", None)
         self.type = channel_json["type"]
         self.name = channel_json["name"]
         self.position = channel_json["position"]

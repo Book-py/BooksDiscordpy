@@ -9,9 +9,15 @@ class Guild:
     def __init__(self, bot, json):
         self.bot = bot
 
+        # print(json)
+
         self.roles = json["roles"]
         self.id = json["id"]
         self.name = json["name"]
+
+        # print(self.name)
+        # print(json["name"])
+
         self.icon = json["icon"]
         self.description = json["description"]
         self.splash = json["splash"]
