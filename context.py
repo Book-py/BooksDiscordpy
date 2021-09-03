@@ -6,7 +6,7 @@ class Context:
     def __init__(self, bot, message: Message):
         self.bot = bot
         self.message = message
-        self.guild = message.guild
+        self.guild_id = message.guild_id
         self.channel = message.channel
 
     async def send(self, *args, **kwargs):

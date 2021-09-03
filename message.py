@@ -14,6 +14,4 @@ class Message:
         self.author = message_json["author"]
         self.guild_id = message_json["guild_id"]
 
-        self.guild = Guild(self.bot, await self.bot.get_guild(message_json["guild_id"]))
-
         return self
